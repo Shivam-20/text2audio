@@ -1,0 +1,5 @@
+openai-whisper
+flask
+flask-cors
+pydub
+deep-translator
