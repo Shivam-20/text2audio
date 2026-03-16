@@ -10,12 +10,30 @@ app = Flask(__name__)
 CORS(app)
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
+# Resolve frontend dir as an absolute path to avoid issues when the
+# server is started from a different working directory.
+FRONTEND_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "frontend")
+)
+if not os.path.isdir(FRONTEND_DIR):
+    # Warn early so logs show why send_from_directory could 404
+    app.logger.warning("Frontend directory not found: %s", FRONTEND_DIR)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 ALLOWED_EXTENSIONS = {
-    "wav", "mp3", "m4a", "flac", "ogg", "webm", "mp4", "mpeg", "mpga", "oga", "wma", "aac"
+    "wav",
+    "mp3",
+    "m4a",
+    "flac",
+    "ogg",
+    "webm",
+    "mp4",
+    "mpeg",
+    "mpga",
+    "oga",
+    "wma",
+    "aac",
 }
 
 # Global transcriber instance
@@ -28,8 +46,17 @@ def allowed_file(filename):
 
 # ── Serve Frontend ──────────────────────────────────────────────────────────
 
+
 @app.route("/")
 def serve_index():
+    # Explicitly check file existence and return a helpful error if missing.
+    index_path = os.path.join(FRONTEND_DIR, "index.html")
+    if not os.path.isfile(index_path):
+        app.logger.error("Index file not found: %s", index_path)
+        return (
+            "Index page not found on server. Check that frontend/index.html exists",
+            404,
+        )
     return send_from_directory(FRONTEND_DIR, "index.html")
 
 
@@ -40,13 +67,16 @@ def serve_static(path):
 
 # ── API Routes ──────────────────────────────────────────────────────────────
 
+
 @app.route("/api/models", methods=["GET"])
 def list_models():
     """List available Whisper models with their specs."""
-    return jsonify({
-        "models": transcriber.AVAILABLE_MODELS,
-        "current_model": transcriber.model_name,
-    })
+    return jsonify(
+        {
+            "models": transcriber.AVAILABLE_MODELS,
+            "current_model": transcriber.model_name,
+        }
+    )
 
 
 @app.route("/api/status", methods=["GET"])
@@ -94,14 +124,20 @@ def transcribe():
         return jsonify({"error": "Empty filename"}), 400
 
     if not allowed_file(file.filename):
-        return jsonify({"error": f"Unsupported format. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"}), 400
+        return jsonify(
+            {
+                "error": f"Unsupported format. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+            }
+        ), 400
 
     # Check file size
     file.seek(0, 2)
     size = file.tell()
     file.seek(0)
     if size > MAX_FILE_SIZE:
-        return jsonify({"error": f"File too large. Max {MAX_FILE_SIZE // (1024*1024)} MB"}), 400
+        return jsonify(
+            {"error": f"File too large. Max {MAX_FILE_SIZE // (1024 * 1024)} MB"}
+        ), 400
 
     # Auto-load default model if none loaded
     if transcriber.model is None:
@@ -126,10 +162,7 @@ def transcribe():
             language = None
 
         result = transcriber.transcribe(
-            save_path, 
-            language=language, 
-            task=task,
-            target_language=target_language
+            save_path, language=language, task=task, target_language=target_language
         )
         return jsonify(result)
 
